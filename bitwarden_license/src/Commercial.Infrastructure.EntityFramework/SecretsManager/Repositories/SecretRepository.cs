@@ -1,6 +1,7 @@
 ﻿using System.Linq.Expressions;
 using AutoMapper;
 using Bit.Core.Enums;
+using Bit.Core.SecretsManager.Models.Data;
 using Bit.Core.SecretsManager.Repositories;
 using Bit.Infrastructure.EntityFramework;
 using Bit.Infrastructure.EntityFramework.Repositories;
@@ -53,7 +54,7 @@ public class SecretRepository : Repository<Core.SecretsManager.Entities.Secret, 
                 ap.Group.GroupUsers.Any(gu => gu.OrganizationUser.UserId == userId && ap.Read)));
 
 
-    public async Task<IEnumerable<Core.SecretsManager.Entities.Secret>> GetManyByOrganizationIdAsync(Guid organizationId, Guid userId, AccessClientType accessType)
+    public async Task<IEnumerable<SecretPermissionDetails>> GetManyByOrganizationIdAsync(Guid organizationId, Guid userId, AccessClientType accessType)
     {
         using var scope = ServiceScopeFactory.CreateScope();
         var dbContext = GetDatabaseContext(scope);
@@ -67,8 +68,21 @@ public class SecretRepository : Repository<Core.SecretsManager.Entities.Secret, 
             _ => throw new ArgumentOutOfRangeException(nameof(accessType), accessType, null),
         };
 
-        var secrets = await query.OrderBy(c => c.RevisionDate).ToListAsync();
-        return Mapper.Map<List<Core.SecretsManager.Entities.Secret>>(secrets);
+        var secrets = await query.Select(s => new SecretPermissionDetails
+        {
+            Id = s.Id,
+            OrganizationId = s.OrganizationId,
+            Key = s.Key,
+            Value = s.Value,
+            Note = s.Note,
+            CreationDate = s.CreationDate,
+            RevisionDate = s.RevisionDate,
+            DeletedDate = s.DeletedDate,
+            Projects = s.Projects.Select(p => Mapper.Map<Bit.Core.SecretsManager.Entities.Project>(p)).ToList(),
+            Read = true,
+            Write = false,
+        }).OrderBy(c => c.RevisionDate).ToListAsync();
+        return secrets;
     }
 
     public async Task<IEnumerable<Core.SecretsManager.Entities.Secret>> GetManyByOrganizationIdInTrashByIdsAsync(Guid organizationId, IEnumerable<Guid> ids)
